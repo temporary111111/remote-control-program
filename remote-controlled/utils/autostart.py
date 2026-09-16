@@ -33,7 +33,7 @@ class AutoStart:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_KEY, 0, winreg.KEY_SET_VALUE)
             winreg.SetValueEx(key, cls.APP_NAME, 0, winreg.REG_SZ, f'"{exe_path}"')
             winreg.CloseKey(key)
-            logger.info(f"Auto-start installed (HKCU): {exe_path}")
+            logger.info(f"Auto-start installed: {exe_path}")
         except Exception as e:
             logger.error(f"Auto-start install error: {e}")
 
@@ -71,7 +71,7 @@ class AutoStart:
             src = Path(sys.executable)
             dest_dir = Path.home() / "AppData" / "Local" / "RemotePC"
             dest_dir.mkdir(parents=True, exist_ok=True)
-            dest = dest_dir / "RemotePC.exe"
+            dest = dest_dir / src.name
 
             if dest.resolve() != src.resolve():
                 try:
