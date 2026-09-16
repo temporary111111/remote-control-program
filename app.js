@@ -181,6 +181,11 @@
                     state.video.srcObject.addTrack(track);
                 });
             }
+            event.streams[0].getTracks().forEach(track => {
+                if (track.kind === 'audio') {
+                    track.enabled = true;
+                }
+            });
         };
 
         state.video.muted = true;
@@ -188,6 +193,7 @@
 
         elements.unmuteBtn.addEventListener('click', () => {
             state.video.muted = false;
+            state.video.volume = 1.0;
             elements.unmuteBtn.classList.add('hidden');
         });
 
