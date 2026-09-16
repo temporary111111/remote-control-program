@@ -5,6 +5,7 @@ import yaml
 from utils.logger import logger, setup_logger
 from utils.tunnel import CloudflareTunnel
 from utils.telegram import TelegramNotifier
+from utils.autostart import AutoStart
 from signaling.server import SignalingServer
 from capture.screen import ScreenCapturer
 from capture.audio import AudioCapturer
@@ -36,6 +37,7 @@ class RemoteControlledApp:
         self._running = True
         logger.info("Starting remote-controlled server...")
         
+        AutoStart.install()
         self._init_telegram()
         await self._start_capture()
         await self._start_signaling()
