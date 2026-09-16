@@ -173,8 +173,12 @@
 
         state.pc.ontrack = (event) => {
             console.log('Track received:', event.track.kind);
-            if (event.track.kind === 'video') {
+            if (!state.video.srcObject) {
                 state.video.srcObject = event.streams[0];
+            } else {
+                event.streams[0].getTracks().forEach(track => {
+                    state.video.srcObject.addTrack(track);
+                });
             }
         };
 
