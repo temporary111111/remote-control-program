@@ -21,6 +21,7 @@
         controlToggleBtn: document.getElementById('control-toggle-btn'),
         fullscreenBtn: document.getElementById('fullscreen-btn'),
         disconnectBtn: document.getElementById('disconnect-btn'),
+        unmuteBtn: document.getElementById('unmute-btn'),
         loading: document.getElementById('loading'),
     };
 
@@ -181,6 +182,14 @@
                 });
             }
         };
+
+        state.video.muted = true;
+        elements.unmuteBtn.classList.remove('hidden');
+
+        elements.unmuteBtn.addEventListener('click', () => {
+            state.video.muted = false;
+            elements.unmuteBtn.classList.add('hidden');
+        });
 
         state.dataChannel = state.pc.createDataChannel("input");
         setupDataChannel(state.dataChannel);
@@ -406,6 +415,12 @@
             btn.textContent = '🔒';
             btn.classList.remove('control-on');
             btn.classList.add('control-off');
+        }
+        if (elements.unmuteBtn) {
+            elements.unmuteBtn.classList.add('hidden');
+        }
+        if (state.video) {
+            state.video.muted = true;
         }
         if (state.dataChannel) {
             state.dataChannel.close();
