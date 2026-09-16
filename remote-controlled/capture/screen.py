@@ -81,7 +81,8 @@ class ScreenCapturer:
 
     def _grab_frame(self) -> np.ndarray:
         screenshot = self.sct.grab(self.monitor)
-        frame = np.array(screenshot)
+        # mss returns BGRA, convert to RGBA by swapping R and B channels
+        frame = np.array(screenshot)[:, :, [2, 1, 0, 3]]
         
         cx, cy = self._get_cursor_pos()
         if 0 <= cx < frame.shape[1] and 0 <= cy < frame.shape[0]:
