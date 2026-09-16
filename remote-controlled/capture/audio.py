@@ -87,16 +87,20 @@ class AudioCapturer:
             loopback_idx = self._find_loopback_device()
             if loopback_idx is not None:
                 try:
+                    device_info = sd.query_devices(loopback_idx, 'input')
+                    sys_channels = min(self.channels, device_info['max_input_channels'])
+                    if sys_channels == 0:
+                        sys_channels = 1
                     self._system_stream = sd.InputStream(
                         device=loopback_idx,
                         samplerate=self.sample_rate,
-                        channels=self.channels,
+                        channels=sys_channels,
                         dtype="float32",
                         blocksize=self.block_size,
                         callback=self._system_callback,
                     )
                     self._system_stream.start()
-                    logger.info("System audio capture started")
+                    logger.info(f"System audio capture started (channels={sys_channels})")
                 except Exception as e:
                     logger.error(f"Failed to start system audio: {e}")
             else:
@@ -106,16 +110,20 @@ class AudioCapturer:
             mic_idx = self._find_mic_device()
             if mic_idx is not None:
                 try:
+                    device_info = sd.query_devices(mic_idx, 'input')
+                    mic_channels = min(self.channels, device_info['max_input_channels'])
+                    if mic_channels == 0:
+                        mic_channels = 1
                     self._mic_stream = sd.InputStream(
                         device=mic_idx,
                         samplerate=self.sample_rate,
-                        channels=self.channels,
+                        channels=mic_channels,
                         dtype="float32",
                         blocksize=self.block_size,
                         callback=self._mic_callback,
                     )
                     self._mic_stream.start()
-                    logger.info("Microphone capture started")
+                    logger.info(f"Microphone capture started (channels={mic_channels})")
                 except Exception as e:
                     logger.error(f"Failed to start microphone: {e}")
             else:
