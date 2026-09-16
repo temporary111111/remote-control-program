@@ -10,7 +10,7 @@ capture:
     sample_rate: 48000
     channels: 2
     include_system: true
-    include_mic: true
+    include_mic: false
 
 webrtc:
   video_codec: VP8
