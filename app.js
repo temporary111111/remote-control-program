@@ -183,9 +183,14 @@
     }
 
     function setupDataChannel(channel) {
-        channel.onopen = () => console.log('Data channel open');
+        channel.onopen = () => {
+            console.log('Data channel open');
+            console.log('Data channel label:', channel.label);
+            console.log('Data channel readyState:', channel.readyState);
+        };
         channel.onclose = () => console.log('Data channel closed');
         channel.onerror = (err) => console.error('Data channel error:', err);
+        channel.onmessage = (event) => console.log('Data channel message:', event.data);
     }
 
     async function createOffer() {
