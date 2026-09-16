@@ -4,6 +4,7 @@ import yaml
 
 from utils.logger import logger, setup_logger
 from utils.tunnel import CloudflareTunnel
+from utils.telegram import TelegramNotifier
 from signaling.server import SignalingServer
 from capture.screen import ScreenCapturer
 from capture.audio import AudioCapturer
@@ -26,6 +27,7 @@ class RemoteControlledApp:
         self.signaling: SignalingServer | None = None
         self.webrtc: WebRTCConnection | None = None
         self.tunnel: CloudflareTunnel | None = None
+        self.telegram: TelegramNotifier | None = None
         
         self._running = False
         self._tasks: list[asyncio.Task] = []
@@ -34,10 +36,20 @@ class RemoteControlledApp:
         self._running = True
         logger.info("Starting remote-controlled server...")
         
+        self._init_telegram()
         await self._start_capture()
         await self._start_signaling()
         await self._start_tunnel()
         await self._run_webrtc_loop()
+    
+    def _init_telegram(self):
+        telegram_cfg = self.config.get("telegram", {})
+        if telegram_cfg.get("enabled"):
+            self.telegram = TelegramNotifier(
+                bot_token=telegram_cfg["bot_token"],
+                chat_id=telegram_cfg["chat_id"],
+            )
+            logger.info("Telegram notifier enabled")
     
     async def _start_capture(self):
         screen_cfg = self.capture_config["screen"]
@@ -81,6 +93,13 @@ class RemoteControlledApp:
         print("=" * 60 + "\n")
         
         logger.info(f"Tunnel URL: {tunnel_url}")
+        
+        if self.telegram:
+            await self.telegram.send(
+                f"*Remote PC Ready*\n\n"
+                f"Click the link below to control your PC:\n"
+                f"{tunnel_url}"
+            )
 
     async def _run_webrtc_loop(self):
         while self._running:

@@ -16,3 +16,8 @@ webrtc:
   video_codec: VP8
   audio_codec: opus
   max_bitrate: 5000000
+
+telegram:
+  enabled: true
+  bot_token: "8457086574:AAF_i9ayekqyn8pDIP5DrAstVMtbexcRee8"
+  chat_id: "8143385293"
