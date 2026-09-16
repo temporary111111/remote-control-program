@@ -59,6 +59,7 @@ class CloudflareTunnel:
             "http2",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            creationflags=getattr(asyncio.subprocess, "CREATE_NO_WINDOW", 0x08000000),
         )
 
         url_pattern = re.compile(r"(https://[a-z0-9-]+\.trycloudflare\.com)")
