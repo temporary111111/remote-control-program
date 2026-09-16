@@ -44,19 +44,33 @@ class InputHandler:
         data = message.get("data", {})
         
         try:
+            screen_width, screen_height = self._get_screen_size()
+            
             if action == "mousemove":
-                x = data.get("x", 0)
-                y = data.get("y", 0)
+                rel_x = data.get("x", 0)
+                rel_y = data.get("y", 0)
+                x = int(rel_x * screen_width)
+                y = int(rel_y * screen_height)
                 self.mouse_controller.position = (x, y)
             
             elif action == "mousedown":
                 button = data.get("button", "left")
                 btn = mouse.Button.left if button == "left" else mouse.Button.right
+                rel_x = data.get("x", 0)
+                rel_y = data.get("y", 0)
+                x = int(rel_x * screen_width)
+                y = int(rel_y * screen_height)
+                self.mouse_controller.position = (x, y)
                 self.mouse_controller.press(btn)
             
             elif action == "mouseup":
                 button = data.get("button", "left")
                 btn = mouse.Button.left if button == "left" else mouse.Button.right
+                rel_x = data.get("x", 0)
+                rel_y = data.get("y", 0)
+                x = int(rel_x * screen_width)
+                y = int(rel_y * screen_height)
+                self.mouse_controller.position = (x, y)
                 self.mouse_controller.release(btn)
             
             elif action == "mousewheel":
@@ -95,6 +109,11 @@ class InputHandler:
         key = self._parse_key(key_str)
         if key:
             self.keyboard_controller.release(key)
+
+    def _get_screen_size(self):
+        import ctypes
+        user32 = ctypes.windll.user32
+        return user32.GetSystemMetrics(0), user32.GetSystemMetrics(1)
 
     def _parse_key(self, key_str: str):
         special_keys = {

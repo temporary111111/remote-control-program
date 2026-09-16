@@ -208,6 +208,21 @@ body {
     object-fit: contain;
     background: #0d1b2a;
     z-index: 10;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#remote-video::-webkit-media-controls {
+    display: none !important;
+}
+
+#remote-video::-webkit-media-controls-enclosure {
+    display: none !important;
+}
+
+#remote-video::-webkit-media-controls-panel {
+    display: none !important;
 }
 
 #remote-video.cursor-grab {

@@ -240,8 +240,8 @@
             const rect = state.video.getBoundingClientRect();
             sendInput('mousedown', {
                 button: e.button === 0 ? 'left' : 'right',
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
+                x: (e.clientX - rect.left) / rect.width,
+                y: (e.clientY - rect.top) / rect.height,
             });
         });
 
@@ -252,16 +252,16 @@
             const rect = state.video.getBoundingClientRect();
             sendInput('mouseup', {
                 button: e.button === 0 ? 'left' : 'right',
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
+                x: (e.clientX - rect.left) / rect.width,
+                y: (e.clientY - rect.top) / rect.height,
             });
         });
 
         state.video.addEventListener('mousemove', (e) => {
             const rect = state.video.getBoundingClientRect();
             sendInput('mousemove', {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top,
+                x: (e.clientX - rect.left) / rect.width,
+                y: (e.clientY - rect.top) / rect.height,
             });
         });
 
@@ -283,6 +283,35 @@
         }, { passive: false });
 
         state.video.addEventListener('contextmenu', (e) => e.preventDefault());
+
+        // Touch support
+        state.video.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = state.video.getBoundingClientRect();
+            isMouseDown = true;
+            sendInput('mousedown', {
+                button: 'left',
+                x: (touch.clientX - rect.left) / rect.width,
+                y: (touch.clientY - rect.top) / rect.height,
+            });
+        }, { passive: false });
+
+        state.video.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = state.video.getBoundingClientRect();
+            sendInput('mousemove', {
+                x: (touch.clientX - rect.left) / rect.width,
+                y: (touch.clientY - rect.top) / rect.height,
+            });
+        }, { passive: false });
+
+        state.video.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isMouseDown = false;
+            sendInput('mouseup', { button: 'left' });
+        }, { passive: false });
 
         document.addEventListener('keydown', (e) => {
             if (e.target === elements.tunnelUrl) return;
