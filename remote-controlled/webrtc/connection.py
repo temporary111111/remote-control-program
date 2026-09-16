@@ -109,17 +109,6 @@ class WebRTCConnection:
         video_sender = self.pc.addTrack(self.video_track)
         audio_sender = self.pc.addTrack(self.audio_track)
         
-        if video_sender:
-            try:
-                params = video_sender.getParameters()
-                params.encodings[0].maxBitrate = self.max_bitrate
-                await video_sender.setParameters(params)
-            except AttributeError:
-                logger.warning("getParameters/setParameters not available, skipping bitrate limit")
-        
-        self.data_channel = self.pc.createDataChannel("input", ordered=True)
-        self._setup_data_channel()
-        
         self.input_handler = InputHandler()
         input_queue = asyncio.Queue()
         await self.input_handler.start(input_queue)
