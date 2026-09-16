@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Desktop Controller</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="connect-overlay" class="overlay">
+        <div class="connect-box">
+            <h1>Remote Desktop</h1>
+            <p class="subtitle">Enter tunnel URL from controlled machine</p>
+            <input type="url" id="tunnel-url" placeholder="https://xxx.trycloudflare.com" autocomplete="off">
+            <button id="connect-btn" disabled>Connect</button>
+            <div id="connect-status" class="status"></div>
+        </div>
+    </div>
+
+    <div id="toolbar" class="toolbar hidden">
+        <div class="toolbar-left">
+            <span id="connection-status" class="status connected">Connected</span>
+            <span id="quality-indicator" class="quality">HD</span>
+        </div>
+        <div class="toolbar-right">
+            <button id="fullscreen-btn" title="Fullscreen (F)">⛶</button>
+            <button id="disconnect-btn" title="Disconnect">✕</button>
+        </div>
+    </div>
+
+    <video id="remote-video" autoplay playsinline></video>
+
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Connecting...</p>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+server:
+  port: 8080
+  signaling_path: /ws
+
+capture:
+  screen:
+    monitor: 1
+    fps: 30
+  audio:
+    sample_rate: 48000
+    channels: 2
+    include_system: true
+    include_mic: true
+
+webrtc:
+  video_codec: VP8
+  audio_codec: opus
+  max_bitrate: 5000000
