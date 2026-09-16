@@ -1,6 +1,7 @@
 import asyncio
 import sys
 import yaml
+from pathlib import Path
 
 from utils.logger import logger, setup_logger
 from utils.tunnel import CloudflareTunnel
@@ -13,8 +14,16 @@ from capture.input import InputHandler
 from webrtc.connection import WebRTCConnection
 
 
+def get_base_path() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).parent
+
+
 class RemoteControlledApp:
-    def __init__(self, config_path: str = "config.yaml"):
+    def __init__(self, config_path: str = None):
+        if config_path is None:
+            config_path = str(get_base_path() / "config.yaml")
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
         
