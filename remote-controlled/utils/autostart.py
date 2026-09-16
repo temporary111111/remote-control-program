@@ -1,13 +1,18 @@
-import subprocess
 import sys
 import shutil
 from pathlib import Path
 
 from utils.logger import logger
 
+try:
+    import winreg
+except ImportError:
+    winreg = None
+
 
 class AutoStart:
-    TASK_NAME = "RemotePC"
+    REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    APP_NAME = "RemotePC"
 
     @classmethod
     def install(cls):
@@ -20,41 +25,43 @@ class AutoStart:
             logger.error("Could not determine exe path for auto-start")
             return
 
-        cmd = [
-            "schtasks", "/create",
-            "/tn", cls.TASK_NAME,
-            "/tr", f'"{exe_path}"',
-            "/sc", "onlogon",
-            "/f",
-        ]
+        if winreg is None:
+            logger.error("winreg not available")
+            return
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                logger.info(f"Auto-start installed: {exe_path}")
-            else:
-                logger.error(f"Auto-start failed (code {result.returncode}): {result.stderr.strip()}")
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_KEY, 0, winreg.KEY_SET_VALUE)
+            winreg.SetValueEx(key, cls.APP_NAME, 0, winreg.REG_SZ, f'"{exe_path}"')
+            winreg.CloseKey(key)
+            logger.info(f"Auto-start installed (HKCU): {exe_path}")
         except Exception as e:
             logger.error(f"Auto-start install error: {e}")
 
     @classmethod
     def uninstall(cls):
-        cmd = ["schtasks", "/delete", "/tn", cls.TASK_NAME, "/f"]
+        if winreg is None:
+            return
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                logger.info("Auto-start removed")
-            else:
-                logger.warning(f"Auto-start remove failed: {result.stderr}")
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_KEY, 0, winreg.KEY_SET_VALUE)
+            winreg.DeleteValue(key, cls.APP_NAME)
+            winreg.CloseKey(key)
+            logger.info("Auto-start removed")
+        except FileNotFoundError:
+            pass
         except Exception as e:
             logger.error(f"Auto-start uninstall error: {e}")
 
     @classmethod
     def is_installed(cls) -> bool:
-        cmd = ["schtasks", "/query", "/tn", cls.TASK_NAME]
+        if winreg is None:
+            return False
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            return result.returncode == 0
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, cls.REG_KEY, 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, cls.APP_NAME)
+            winreg.CloseKey(key)
+            return True
+        except FileNotFoundError:
+            return False
         except Exception:
             return False
 
