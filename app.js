@@ -176,6 +176,9 @@
             }
         };
 
+        state.dataChannel = state.pc.createDataChannel("input");
+        setupDataChannel(state.dataChannel);
+
         state.pc.ondatachannel = (event) => {
             state.dataChannel = event.channel;
             setupDataChannel(state.dataChannel);
@@ -227,6 +230,8 @@
     function sendInput(action, data) {
         if (state.dataChannel && state.dataChannel.readyState === 'open') {
             state.dataChannel.send(JSON.stringify({ action, data }));
+        } else {
+            console.log('Data channel not ready:', state.dataChannel ? state.dataChannel.readyState : 'null');
         }
     }
 
