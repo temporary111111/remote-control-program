@@ -1,5 +1,6 @@
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 
 from utils.logger import logger
@@ -15,12 +16,15 @@ class AutoStart:
             return
 
         exe_path = cls._get_exe_path()
+        if not exe_path:
+            logger.error("Could not determine exe path for auto-start")
+            return
+
         cmd = [
             "schtasks", "/create",
             "/tn", cls.TASK_NAME,
             "/tr", f'"{exe_path}"',
             "/sc", "onlogon",
-            "/rl", "highest",
             "/f",
         ]
 
@@ -29,7 +33,7 @@ class AutoStart:
             if result.returncode == 0:
                 logger.info(f"Auto-start installed: {exe_path}")
             else:
-                logger.error(f"Auto-start failed: {result.stderr}")
+                logger.error(f"Auto-start failed (code {result.returncode}): {result.stderr.strip()}")
         except Exception as e:
             logger.error(f"Auto-start install error: {e}")
 
@@ -55,7 +59,22 @@ class AutoStart:
             return False
 
     @classmethod
-    def _get_exe_path(cls) -> str:
+    def _get_exe_path(cls) -> str | None:
         if getattr(sys, "frozen", False):
-            return sys.executable
-        return str(Path(__file__).parent.parent / "main.py")
+            src = Path(sys.executable)
+            dest_dir = Path.home() / "AppData" / "Local" / "RemotePC"
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest = dest_dir / "RemotePC.exe"
+
+            if dest.resolve() != src.resolve():
+                try:
+                    shutil.copy2(src, dest)
+                    logger.info(f"Copied exe to stable path: {dest}")
+                except Exception as e:
+                    logger.error(f"Failed to copy exe: {e}")
+                    return str(src)
+
+            return str(dest)
+
+        logger.warning("Auto-start only works from built .exe")
+        return None
