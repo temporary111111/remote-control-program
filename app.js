@@ -8,6 +8,7 @@
         dataChannel: null,
         video: document.getElementById('remote-video'),
         connecting: false,
+        controlEnabled: false,
     };
 
     const elements = {
@@ -17,6 +18,7 @@
         connectStatus: document.getElementById('connect-status'),
         toolbar: document.getElementById('toolbar'),
         connectionStatus: document.getElementById('connection-status'),
+        controlToggleBtn: document.getElementById('control-toggle-btn'),
         fullscreenBtn: document.getElementById('fullscreen-btn'),
         disconnectBtn: document.getElementById('disconnect-btn'),
         loading: document.getElementById('loading'),
@@ -228,10 +230,9 @@
     }
 
     function sendInput(action, data) {
+        if (!state.controlEnabled) return;
         if (state.dataChannel && state.dataChannel.readyState === 'open') {
             state.dataChannel.send(JSON.stringify({ action, data }));
-        } else {
-            console.log('Data channel not ready:', state.dataChannel ? state.dataChannel.readyState : 'null');
         }
     }
 
@@ -346,6 +347,8 @@
 
         elements.fullscreenBtn.addEventListener('click', toggleFullscreen);
 
+        elements.controlToggleBtn.addEventListener('click', toggleControl);
+
         elements.disconnectBtn.addEventListener('click', () => {
             cleanup();
             elements.overlay.classList.remove('hidden');
@@ -378,7 +381,28 @@
         }
     }
 
+    function toggleControl() {
+        state.controlEnabled = !state.controlEnabled;
+        const btn = elements.controlToggleBtn;
+        if (state.controlEnabled) {
+            btn.textContent = '🔓';
+            btn.classList.remove('control-off');
+            btn.classList.add('control-on');
+        } else {
+            btn.textContent = '🔒';
+            btn.classList.remove('control-on');
+            btn.classList.add('control-off');
+        }
+    }
+
     function cleanup() {
+        state.controlEnabled = false;
+        const btn = elements.controlToggleBtn;
+        if (btn) {
+            btn.textContent = '🔒';
+            btn.classList.remove('control-on');
+            btn.classList.add('control-off');
+        }
         if (state.dataChannel) {
             state.dataChannel.close();
             state.dataChannel = null;

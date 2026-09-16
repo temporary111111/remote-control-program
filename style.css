@@ -200,6 +200,20 @@ body {
     background: #ff4757;
 }
 
+#control-toggle-btn {
+    font-size: 1rem;
+    min-width: 36px;
+}
+
+#control-toggle-btn.control-off {
+    background: #233554;
+}
+
+#control-toggle-btn.control-on {
+    background: #64ffda;
+    color: #0d1b2a;
+}
+
 #remote-video {
     position: fixed;
     inset: 0;
