@@ -115,14 +115,14 @@ class RemoteControlledApp:
     async def _run_webrtc_loop(self):
         while self._running:
             logger.info("Waiting for controller connection...")
-            
+
             offer_sdp = await self.signaling.wait_for_offer(timeout=300.0)
             if not offer_sdp:
                 logger.warning("No offer received, continuing to wait...")
                 continue
-            
+
             logger.info("Controller connected, creating WebRTC connection...")
-            
+
             self.webrtc = WebRTCConnection(
                 frame_queue=self.frame_queue,
                 audio_capturer=self.audio_capturer,
@@ -131,51 +131,41 @@ class RemoteControlledApp:
                 channels=self.capture_config["audio"]["channels"],
                 max_bitrate=self.webrtc_config["max_bitrate"],
             )
-            
+
             self.webrtc.set_ice_candidate_callback(self._on_ice_candidate)
             self.webrtc.set_connection_state_callback(self._on_connection_state_change)
-            
+
             try:
-                # Wait for offer from controller
-                offer_sdp = await self.signaling.wait_for_offer(timeout=30.0)
-                if not offer_sdp:
-                    logger.warning("No offer received from controller")
-                    continue
-                
                 logger.info("Received offer, creating answer...")
-                # Set remote description (controller's offer) and create answer
                 await self.webrtc.set_remote_description(offer_sdp, "offer")
                 answer = await self.webrtc.create_answer()
                 if answer is None:
                     logger.error("Failed to create answer")
                     continue
-                
+
                 await self.signaling.send_answer(answer.sdp)
                 logger.info("Answer sent to controller")
-                
-                # Give time for answer to be processed
+
                 await asyncio.sleep(0.5)
-                
                 logger.info("WebRTC connection established")
-                
+
                 while self.webrtc.pc and self.webrtc.pc.connectionState not in ("failed", "closed", "disconnected"):
                     ice_messages = self.signaling.get_pending_ice()
                     for msg in ice_messages:
-                        logger.info(f"Processing ICE candidate: {msg.payload}")
                         await self.webrtc.add_ice_candidate(
                             msg.payload["candidate"],
                             msg.payload["sdpMid"],
                             msg.payload["sdpMLineIndex"]
                         )
                     await asyncio.sleep(0.1)
-                
+
             except Exception as e:
                 logger.error(f"WebRTC error: {e}")
             finally:
                 if self.webrtc:
                     await self.webrtc.close()
                     self.webrtc = None
-                
+                self.signaling.reset_state()
                 logger.info("Controller disconnected, waiting for next connection...")
 
     async def _on_ice_candidate(self, candidate: str, sdp_mid: str, sdp_mline_index: int):

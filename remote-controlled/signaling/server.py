@@ -126,7 +126,7 @@ class SignalingServer:
         pass
 
     async def _handle_ice_ws(self, client_id: str, message: SignalMessage):
-        if self._controller_ws and self._controller_ws != self._controller_ws:
+        if self._controller_ws is None:
             return
         logger.debug(f"Received ICE from {client_id}: {message.payload}")
         self._pending_ice.append(message)
@@ -170,6 +170,11 @@ class SignalingServer:
 
     def has_controller(self) -> bool:
         return self._controller_ws is not None and not self._controller_ws.closed
+
+    def reset_state(self):
+        self._pending_ice.clear()
+        self._offer_sdp = None
+        self._offer_event.clear()
 
     async def send_answer(self, sdp: str):
         if self._controller_ws and not self._controller_ws.closed:

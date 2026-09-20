@@ -9,6 +9,11 @@
         video: document.getElementById('remote-video'),
         connecting: false,
         controlEnabled: false,
+        reconnectAttempts: 0,
+        maxReconnectAttempts: 10,
+        reconnectDelay: 3000,
+        reconnectTimer: null,
+        intentionalDisconnect: false,
     };
 
     const elements = {
@@ -71,6 +76,12 @@
         }
 
         state.tunnelUrl = url;
+        state.intentionalDisconnect = false;
+        state.reconnectAttempts = 0;
+        if (state.reconnectTimer) {
+            clearTimeout(state.reconnectTimer);
+            state.reconnectTimer = null;
+        }
         setConnecting(true);
         hideStatus();
         showLoading(true);
@@ -91,24 +102,29 @@
 
     async function setupSignaling() {
         return new Promise((resolve, reject) => {
+            let settled = false;
             const wsUrl = state.tunnelUrl.replace('https://', 'wss://') + '/ws';
             state.ws = new WebSocket(wsUrl);
 
             state.ws.onopen = () => {
+                if (settled) return;
+                settled = true;
                 console.log('Signaling connected');
                 resolve();
             };
 
             state.ws.onerror = (err) => {
+                if (settled) return;
+                settled = true;
                 console.error('Signaling error:', err);
                 reject(new Error('Signaling connection failed'));
             };
 
             state.ws.onclose = () => {
+                if (settled) return;
+                settled = true;
                 console.log('Signaling closed');
-                if (state.connecting) {
-                    reject(new Error('Signaling disconnected'));
-                }
+                reject(new Error('Signaling disconnected'));
             };
 
             state.ws.onmessage = (event) => {
@@ -146,16 +162,17 @@
         state.pc = new RTCPeerConnection(config);
 
         state.pc.onconnectionstatechange = () => {
-            console.log('Connection state:', state.pc.connectionState);
-            updateConnectionStatus(state.pc.connectionState === 'connected');
+            const connState = state.pc ? state.pc.connectionState : 'closed';
+            console.log('Connection state:', connState);
+            updateConnectionStatus(connState === 'connected');
             
-            if (state.pc.connectionState === 'connected') {
+            if (connState === 'connected') {
                 elements.overlay.classList.add('hidden');
                 showToolbar();
-            } else if (['failed', 'closed', 'disconnected'].includes(state.pc.connectionState)) {
+            } else if (['failed', 'disconnected'].includes(connState)) {
+                console.log('Connection lost, starting reconnect...');
                 cleanup();
-                elements.overlay.classList.remove('hidden');
-                hideToolbar();
+                startReconnect();
             }
         };
 
@@ -369,10 +386,18 @@
         elements.controlToggleBtn.addEventListener('click', toggleControl);
 
         elements.disconnectBtn.addEventListener('click', () => {
+            state.intentionalDisconnect = true;
+            if (state.reconnectTimer) {
+                clearTimeout(state.reconnectTimer);
+                state.reconnectTimer = null;
+            }
+            state.reconnectAttempts = 0;
             cleanup();
             elements.overlay.classList.remove('hidden');
             hideToolbar();
             updateConnectionStatus(false);
+            const overlayTitle = elements.overlay.querySelector('h1');
+            if (overlayTitle) overlayTitle.textContent = 'Remote Desktop';
         });
     }
 
@@ -441,6 +466,52 @@
             state.ws = null;
         }
         state.video.srcObject = null;
+    }
+
+    function startReconnect() {
+        if (state.intentionalDisconnect) return;
+        if (state.reconnectTimer) return;
+        if (state.reconnectAttempts >= state.maxReconnectAttempts) {
+            showStatus(`Connection lost after ${state.maxReconnectAttempts} attempts. Click Connect to try again.`, 'error');
+            elements.overlay.classList.remove('hidden');
+            hideToolbar();
+            updateConnectionStatus(false);
+            state.reconnectAttempts = 0;
+            return;
+        }
+
+        state.reconnectAttempts++;
+        const delay = state.reconnectDelay * Math.pow(2, state.reconnectAttempts - 1);
+        const cappedDelay = Math.min(delay, 60000);
+
+        const overlayTitle = elements.overlay.querySelector('h1');
+        if (overlayTitle) {
+            overlayTitle.textContent = `Reconnecting... (${state.reconnectAttempts}/${state.maxReconnectAttempts})`;
+        }
+        elements.overlay.classList.remove('hidden');
+        hideToolbar();
+        updateConnectionStatus(false);
+
+        console.log(`Reconnecting in ${cappedDelay}ms (attempt ${state.reconnectAttempts})`);
+
+        state.reconnectTimer = setTimeout(async () => {
+            state.reconnectTimer = null;
+            if (state.intentionalDisconnect) return;
+            cleanup();
+            try {
+                await setupSignaling();
+                await setupWebRTC();
+                await createOffer();
+                state.reconnectAttempts = 0;
+                const overlayTitle = elements.overlay.querySelector('h1');
+                if (overlayTitle) {
+                    overlayTitle.textContent = 'Remote Desktop';
+                }
+            } catch (err) {
+                console.error('Reconnect failed:', err);
+                startReconnect();
+            }
+        }, cappedDelay);
     }
 
     function init() {
