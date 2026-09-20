@@ -11,7 +11,8 @@ class TelegramNotifier:
 
     async def send(self, message: str):
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = aiohttp.TCPConnector(ssl=False)
+            async with aiohttp.ClientSession(connector=connector) as session:
                 payload = {
                     "chat_id": self.chat_id,
                     "text": message,
