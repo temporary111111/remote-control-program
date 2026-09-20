@@ -97,6 +97,7 @@ class RemoteControlledApp:
 
     async def _start_tunnel(self):
         self.tunnel = CloudflareTunnel(self.server_config["port"])
+        self.tunnel.set_url_change_callback(self._on_tunnel_url_change)
         tunnel_url = await self.tunnel.start()
         
         print("\n" + "=" * 60)
@@ -110,6 +111,21 @@ class RemoteControlledApp:
                 f"*Remote PC Ready*\n\n"
                 f"Click the link below to control your PC:\n"
                 f"{tunnel_url}"
+            )
+        
+        self._monitor_task = asyncio.create_task(self.tunnel.monitor())
+
+    async def _on_tunnel_url_change(self, new_url: str):
+        logger.info(f"Tunnel URL changed: {new_url}")
+        print("\n" + "=" * 60)
+        print(f"NEW Tunnel URL: {new_url}")
+        print("=" * 60 + "\n")
+        
+        if self.telegram:
+            await self.telegram.send(
+                f"*Remote PC - New URL*\n\n"
+                f"Tunnel restarted. Use new link:\n"
+                f"{new_url}"
             )
 
     async def _run_webrtc_loop(self):

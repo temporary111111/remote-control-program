@@ -5,6 +5,7 @@ import sys
 import tempfile
 import subprocess
 from pathlib import Path
+from typing import Callable, Optional
 
 from utils.logger import logger
 
@@ -15,6 +16,12 @@ class CloudflareTunnel:
         self.process: asyncio.subprocess.Process | None = None
         self.tunnel_url: str | None = None
         self._cloudflared_path: str | None = None
+        self._on_url_change: Optional[Callable] = None
+        self._monitor_task: Optional[asyncio.Task] = None
+        self._stopping = False
+
+    def set_url_change_callback(self, callback: Callable):
+        self._on_url_change = callback
 
     def _get_cloudflared_path(self) -> str:
         if self._cloudflared_path and os.path.exists(self._cloudflared_path):
@@ -86,6 +93,13 @@ class CloudflareTunnel:
             logger.warning(f"Could not copy to clipboard: {e}")
 
     async def stop(self):
+        self._stopping = True
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
         if self.process:
             self.process.terminate()
             try:
@@ -94,6 +108,22 @@ class CloudflareTunnel:
                 self.process.kill()
                 await self.process.wait()
             logger.info("Cloudflare tunnel stopped")
+
+    async def monitor(self):
+        self._stopping = False
+        while not self._stopping:
+            if self.process and self.process.returncode is not None:
+                logger.warning(f"Cloudflared exited (code {self.process.returncode}), restarting...")
+                try:
+                    new_url = await self.start()
+                    logger.info(f"Tunnel restarted: {new_url}")
+                    if self._on_url_change:
+                        await self._on_url_change(new_url)
+                except Exception as e:
+                    logger.error(f"Failed to restart cloudflared: {e}")
+                    await asyncio.sleep(5)
+                    continue
+            await asyncio.sleep(2)
 
 
 async def start_tunnel(port: int = 8080) -> str:
