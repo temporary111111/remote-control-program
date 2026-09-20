@@ -88,6 +88,13 @@
 
         try {
             await setupSignaling();
+            state.ws.onclose = () => {
+                console.log('Signaling lost during session');
+                if (!state.intentionalDisconnect && state.pc) {
+                    cleanup();
+                    startReconnect();
+                }
+            };
             await setupWebRTC();
             await createOffer();
         } catch (err) {
@@ -500,6 +507,13 @@
             cleanup();
             try {
                 await setupSignaling();
+                state.ws.onclose = () => {
+                    console.log('Signaling lost during session');
+                    if (!state.intentionalDisconnect && state.pc) {
+                        cleanup();
+                        startReconnect();
+                    }
+                };
                 await setupWebRTC();
                 await createOffer();
                 state.reconnectAttempts = 0;
