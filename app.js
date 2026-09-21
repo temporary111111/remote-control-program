@@ -7,7 +7,11 @@
         tunnelUrl: '',
         dataChannel: null,
         video: document.getElementById('remote-video'),
-        audio: document.getElementById('remote-audio'),
+        audioCtx: null,
+        audioSource: null,
+        audioGain: null,
+        audioAnalyser: null,
+        audioConnected: false,
         connecting: false,
         controlEnabled: false,
         reconnectAttempts: 0,
@@ -211,19 +215,17 @@
                     console.log('Added video track:', event.track.id);
                 }
             } else if (event.track.kind === 'audio') {
-                state.audio.srcObject = new MediaStream([event.track]);
-                state.audio.volume = 0;
-                state.audio.play().catch(e => console.warn('Audio autoplay blocked:', e));
-                console.log('Audio track assigned to <audio> element, volume=0 (muted)');
-                startAudioDiagnostics();
+                setupWebAudio(event.track);
                 elements.unmuteBtn.classList.remove('hidden');
             }
         };
 
         elements.unmuteBtn.addEventListener('click', () => {
-            state.audio.volume = 1.0;
+            if (state.audioGain) {
+                state.audioGain.gain.setTargetAtTime(1.0, state.audioCtx.currentTime, 0.01);
+            }
             elements.unmuteBtn.classList.add('hidden');
-            console.log('Audio unmuted (volume=1.0)');
+            console.log('Audio unmuted via Web Audio API');
         });
 
         state.dataChannel = state.pc.createDataChannel("input");
@@ -452,67 +454,80 @@
     }
 
     let _audioDiagInterval = null;
-    let _audioCtx = null;
-    let _audioSourceCreated = false;
 
-    function startAudioDiagnostics() {
-        if (_audioDiagInterval) return;
+    function setupWebAudio(track) {
         try {
-            if (!_audioCtx) {
-                _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                console.log('AudioContext state:', _audioCtx.state);
+            if (!state.audioCtx) {
+                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+                console.log('AudioContext created, state:', state.audioCtx.state, 'sampleRate:', state.audioCtx.sampleRate);
             }
-            if (_audioCtx.state === 'suspended') {
-                _audioCtx.resume().then(() => console.log('AudioContext resumed'));
+            if (state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume().then(() => console.log('AudioContext resumed'));
             }
 
-            if (!_audioSourceCreated) {
-                const source = _audioCtx.createMediaElementSource(state.audio);
-                const analyser = _audioCtx.createAnalyser();
-                analyser.fftSize = 256;
-                source.connect(analyser);
-                analyser.connect(_audioCtx.destination);
-                window._audioAnalyser = analyser;
-                _audioSourceCreated = true;
-            }
-            const analyser = window._audioAnalyser;
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const stream = new MediaStream([track]);
+            state.audioSource = state.audioCtx.createMediaStreamSource(stream);
+            state.audioGain = state.audioCtx.createGain();
+            state.audioGain.gain.value = 0;
+            state.audioAnalyser = state.audioCtx.createAnalyser();
+            state.audioAnalyser.fftSize = 256;
 
-            const audioTracks = state.audio.srcObject?.getTracks() || [];
-            console.log('Audio element tracks:', audioTracks.length);
-            audioTracks.forEach((t, i) => {
-                console.log(`  Audio track ${i}: id=${t.id} enabled=${t.enabled} muted=${t.muted} readyState=${t.readyState}`);
-            });
+            state.audioSource.connect(state.audioGain);
+            state.audioGain.connect(state.audioAnalyser);
+            state.audioAnalyser.connect(state.audioCtx.destination);
+            state.audioConnected = true;
 
-            _audioDiagInterval = setInterval(() => {
-                analyser.getByteFrequencyData(dataArray);
-                const sum = dataArray.reduce((a, b) => a + b, 0);
-                const avg = sum / dataArray.length;
-                const max = Math.max(...dataArray);
-                const nonZero = dataArray.filter(v => v > 0).length;
-                const vol = state.audio.volume;
-                const paused = state.audio.paused;
-                const tracks = state.audio.srcObject?.getTracks() || [];
-                const trackInfo = tracks.map(t => `en=${t.enabled} state=${t.readyState}`).join('; ');
-                console.log(
-                    `Audio diag: avg=${avg.toFixed(1)} max=${max} nonZero=${nonZero}/${dataArray.length} ` +
-                    `volume=${vol} paused=${paused} tracks=${tracks.length} [${trackInfo}]`
-                );
-            }, 5000);
+            console.log('Web Audio: source → gain(0) → analyser → destination');
+            console.log('Audio track:', track.id, 'enabled:', track.enabled, 'readyState:', track.readyState);
+
+            startAudioDiagnostics();
         } catch (e) {
-            console.error('Audio diagnostics failed:', e);
+            console.error('Web Audio setup failed:', e);
         }
     }
 
-    function stopAudioDiagnostics() {
+    function startAudioDiagnostics() {
+        if (_audioDiagInterval || !state.audioAnalyser) return;
+        const analyser = state.audioAnalyser;
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        _audioDiagInterval = setInterval(() => {
+            analyser.getByteFrequencyData(dataArray);
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const avg = sum / dataArray.length;
+            const max = Math.max(...dataArray);
+            const nonZero = dataArray.filter(v => v > 0).length;
+            const gain = state.audioGain ? state.audioGain.gain.value : '?';
+            const ctxState = state.audioCtx ? state.audioCtx.state : '?';
+            console.log(
+                `Audio diag: avg=${avg.toFixed(1)} max=${max} nonZero=${nonZero}/${dataArray.length} ` +
+                `gain=${gain} ctxState=${ctxState}`
+            );
+        }, 5000);
+    }
+
+    function cleanup() {
         if (_audioDiagInterval) {
             clearInterval(_audioDiagInterval);
             _audioDiagInterval = null;
         }
-    }
-
-    function cleanup() {
-        stopAudioDiagnostics();
+        if (state.audioSource) {
+            state.audioSource.disconnect();
+            state.audioSource = null;
+        }
+        if (state.audioGain) {
+            state.audioGain.disconnect();
+            state.audioGain = null;
+        }
+        if (state.audioAnalyser) {
+            state.audioAnalyser.disconnect();
+            state.audioAnalyser = null;
+        }
+        if (state.audioCtx) {
+            state.audioCtx.close().catch(() => {});
+            state.audioCtx = null;
+        }
+        state.audioConnected = false;
         state.controlEnabled = false;
         const btn = elements.controlToggleBtn;
         if (btn) {
@@ -522,10 +537,6 @@
         }
         if (elements.unmuteBtn) {
             elements.unmuteBtn.classList.add('hidden');
-        }
-        if (state.audio) {
-            state.audio.volume = 0;
-            state.audio.srcObject = null;
         }
         if (state.dataChannel) {
             state.dataChannel.close();
