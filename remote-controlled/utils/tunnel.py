@@ -82,7 +82,6 @@ class CloudflareTunnel:
                     self.tunnel_url = match.group(1)
                     self._tunnel_unhealthy = False
                     logger.info(f"Tunnel ready: {self.tunnel_url}")
-                    self._copy_to_clipboard(self.tunnel_url)
                     self._start_stdout_monitor()
                     return self.tunnel_url
 
@@ -147,14 +146,6 @@ class CloudflareTunnel:
         except Exception as e:
             logger.error(f"Failed to restart cloudflared: {e}")
             await asyncio.sleep(5)
-
-    def _copy_to_clipboard(self, text: str):
-        try:
-            import pyperclip
-            pyperclip.copy(text)
-            logger.info("Tunnel URL copied to clipboard")
-        except Exception as e:
-            logger.warning(f"Could not copy to clipboard: {e}")
 
     async def stop(self):
         self._stopping = True

@@ -1,4 +1,5 @@
 import asyncio
+import socket
 import sys
 import yaml
 from pathlib import Path
@@ -26,11 +27,11 @@ class RemoteControlledApp:
             config_path = str(get_base_path() / "config.yaml")
         with open(config_path) as f:
             self.config = yaml.safe_load(f)
-        
+
         self.server_config = self.config["server"]
         self.capture_config = self.config["capture"]
         self.webrtc_config = self.config["webrtc"]
-        
+
         self.frame_queue: asyncio.Queue = asyncio.Queue(maxsize=5)
         self.screen_capturer: ScreenCapturer | None = None
         self.audio_capturer: AudioCapturer | None = None
@@ -38,9 +39,14 @@ class RemoteControlledApp:
         self.webrtc: WebRTCConnection | None = None
         self.tunnel: CloudflareTunnel | None = None
         self.telegram: TelegramNotifier | None = None
-        
+
         self._running = False
         self._tasks: list[asyncio.Task] = []
+
+        self._pc_name = socket.gethostname()
+
+    def _get_pc_info(self) -> str:
+        return self._pc_name
 
     async def start(self):
         self._running = True
@@ -109,8 +115,8 @@ class RemoteControlledApp:
         if self.telegram:
             await self.telegram.send(
                 f"*Remote PC Ready*\n\n"
-                f"Click the link below to control your PC:\n"
-                f"{tunnel_url}"
+                f"*PC:* {self._get_pc_info()}\n"
+                f"*URL:* {tunnel_url}"
             )
         
         self._monitor_task = asyncio.create_task(self.tunnel.monitor())
@@ -124,8 +130,8 @@ class RemoteControlledApp:
         if self.telegram:
             await self.telegram.send(
                 f"*Remote PC - New URL*\n\n"
-                f"Tunnel restarted. Use new link:\n"
-                f"{new_url}"
+                f"*PC:* {self._get_pc_info()}\n"
+                f"*URL:* {new_url}"
             )
 
     async def _run_webrtc_loop(self):
