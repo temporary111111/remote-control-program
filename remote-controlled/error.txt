@@ -1,2 +1,0 @@
-[PYI-10232:ERROR] Failed to extract PIL\_imaging.cp314-win_amd64.pyd: decompression resulted in return code -1!
-[PYI-10232:ERROR] Failed to extract entry: PIL\_imaging.cp314-win_amd64.pyd.
