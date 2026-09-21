@@ -91,10 +91,23 @@ class AudioCapturer:
         if not default_speakers:
             return False
 
-        try:
-            loopback_info = self._p.get_device_info_by_index(default_speakers["loopbackDevice"])
-        except Exception:
-            logger.debug(f"No loopback device for: {default_speakers['name']}")
+        loopback_info = None
+        default_name = default_speakers["name"]
+        for i in range(self._p.get_device_count()):
+            d = self._p.get_device_info_by_index(i)
+            if d.get("isLoopbackDevice") and d["name"] == default_name:
+                loopback_info = d
+                break
+
+        if not loopback_info:
+            for i in range(self._p.get_device_count()):
+                d = self._p.get_device_info_by_index(i)
+                if d.get("isLoopbackDevice") and default_name in d["name"]:
+                    loopback_info = d
+                    break
+
+        if not loopback_info:
+            logger.debug(f"No loopback device for: {default_name}")
             return False
 
         logger.info(f"WASAPI loopback device: [{loopback_info['index']}] {loopback_info['name']}")
