@@ -89,11 +89,7 @@
         try {
             await setupSignaling();
             state.ws.onclose = () => {
-                console.log('Signaling lost during session');
-                if (!state.intentionalDisconnect && state.pc) {
-                    cleanup();
-                    startReconnect();
-                }
+                console.log('Signaling WebSocket closed');
             };
             await setupWebRTC();
             await createOffer();
@@ -508,11 +504,7 @@
             try {
                 await setupSignaling();
                 state.ws.onclose = () => {
-                    console.log('Signaling lost during session');
-                    if (!state.intentionalDisconnect && state.pc) {
-                        cleanup();
-                        startReconnect();
-                    }
+                    console.log('Signaling WebSocket closed during reconnect');
                 };
                 await setupWebRTC();
                 await createOffer();
