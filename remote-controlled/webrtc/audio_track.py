@@ -45,6 +45,7 @@ class AudioCaptureTrack(AudioStreamTrack):
             self._start_time = time.time()
             logger.info("AudioCaptureTrack: first recv() call")
         
+        max_buffer = self.frame_size * 2
         was_silence = False
         while len(self._buffer) < self.frame_size:
             audio_data = await self.audio_capturer.get_mixed_audio()
@@ -74,6 +75,9 @@ class AudioCaptureTrack(AudioStreamTrack):
         
         frame_data = self._buffer[:self.frame_size]
         self._buffer = self._buffer[self.frame_size:]
+
+        if len(self._buffer) > max_buffer:
+            self._buffer = self._buffer[-(self.frame_size):]
         
         frame_data = np.clip(frame_data, -1.0, 1.0)
         frame_data_int = (frame_data * 32767).astype(np.int16)

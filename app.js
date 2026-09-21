@@ -7,6 +7,7 @@
         tunnelUrl: '',
         dataChannel: null,
         video: document.getElementById('remote-video'),
+        audio: document.getElementById('remote-audio'),
         connecting: false,
         controlEnabled: false,
         reconnectAttempts: 0,
@@ -200,31 +201,29 @@
             if (event.streams[0]) {
                 console.log('Stream tracks:', event.streams[0].getTracks().map(t => `${t.kind}:${t.id}`));
             }
-            if (!state.video.srcObject) {
-                state.video.srcObject = new MediaStream();
-                console.log('Created new MediaStream');
+
+            if (event.track.kind === 'video') {
+                if (!state.video.srcObject) {
+                    state.video.srcObject = new MediaStream();
+                }
+                if (!state.video.srcObject.getTracks().find(t => t.id === event.track.id)) {
+                    state.video.srcObject.addTrack(event.track);
+                    console.log('Added video track:', event.track.id);
+                }
+            } else if (event.track.kind === 'audio') {
+                state.audio.srcObject = new MediaStream([event.track]);
+                state.audio.volume = 0;
+                state.audio.play().catch(e => console.warn('Audio autoplay blocked:', e));
+                console.log('Audio track assigned to <audio> element, volume=0 (muted)');
+                startAudioDiagnostics();
+                elements.unmuteBtn.classList.remove('hidden');
             }
-            event.streams[0].getTracks().forEach(track => {
-                if (!state.video.srcObject.getTracks().find(t => t.id === track.id)) {
-                    state.video.srcObject.addTrack(track);
-                    console.log('Added track:', track.kind, track.id, 'enabled:', track.enabled);
-                }
-                if (track.kind === 'audio') {
-                    track.enabled = true;
-                    console.log('Audio track enabled, starting diagnostics...');
-                    startAudioDiagnostics();
-                }
-            });
-            console.log('Video element srcObject tracks:', state.video.srcObject.getTracks().map(t => `${t.kind}:${t.id}`));
         };
 
-        state.video.muted = true;
-        elements.unmuteBtn.classList.remove('hidden');
-
         elements.unmuteBtn.addEventListener('click', () => {
-            state.video.muted = false;
-            state.video.volume = 1.0;
+            state.audio.volume = 1.0;
             elements.unmuteBtn.classList.add('hidden');
+            console.log('Audio unmuted (volume=1.0)');
         });
 
         state.dataChannel = state.pc.createDataChannel("input");
@@ -453,31 +452,36 @@
     }
 
     let _audioDiagInterval = null;
+    let _audioCtx = null;
+    let _audioSourceCreated = false;
 
     function startAudioDiagnostics() {
         if (_audioDiagInterval) return;
         try {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            console.log('AudioContext state:', audioCtx.state);
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume().then(() => console.log('AudioContext resumed'));
+            if (!_audioCtx) {
+                _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('AudioContext state:', _audioCtx.state);
+            }
+            if (_audioCtx.state === 'suspended') {
+                _audioCtx.resume().then(() => console.log('AudioContext resumed'));
             }
 
-            const source = audioCtx.createMediaElementSource(state.video);
-            const analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(analyser);
-            analyser.connect(audioCtx.destination);
+            if (!_audioSourceCreated) {
+                const source = _audioCtx.createMediaElementSource(state.audio);
+                const analyser = _audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                analyser.connect(_audioCtx.destination);
+                window._audioAnalyser = analyser;
+                _audioSourceCreated = true;
+            }
+            const analyser = window._audioAnalyser;
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-            const audioTracks = state.video.srcObject?.getTracks().filter(t => t.kind === 'audio') || [];
-            console.log('Audio tracks:', audioTracks.length);
+            const audioTracks = state.audio.srcObject?.getTracks() || [];
+            console.log('Audio element tracks:', audioTracks.length);
             audioTracks.forEach((t, i) => {
-                console.log(`  Audio track ${i}: id=${t.id} enabled=${t.enabled} muted=${t.muted} readyState=${t.readyState} label=${t.label}`);
-                t.onmute = () => console.log(`Audio track ${i} muted`);
-                t.onunmute = () => console.log(`Audio track ${i} unmuted`);
-                t.onended = () => console.log(`Audio track ${i} ended`);
-                t.onsettingschanged = () => console.log(`Audio track ${i} settings changed:`, t.getSettings());
+                console.log(`  Audio track ${i}: id=${t.id} enabled=${t.enabled} muted=${t.muted} readyState=${t.readyState}`);
             });
 
             _audioDiagInterval = setInterval(() => {
@@ -486,12 +490,13 @@
                 const avg = sum / dataArray.length;
                 const max = Math.max(...dataArray);
                 const nonZero = dataArray.filter(v => v > 0).length;
-                const muted = state.video.muted;
-                const tracks = state.video.srcObject?.getTracks().filter(t => t.kind === 'audio') || [];
-                const trackInfo = tracks.map(t => `en=${t.enabled} muted=${t.muted} state=${t.readyState}`).join('; ');
+                const vol = state.audio.volume;
+                const paused = state.audio.paused;
+                const tracks = state.audio.srcObject?.getTracks() || [];
+                const trackInfo = tracks.map(t => `en=${t.enabled} state=${t.readyState}`).join('; ');
                 console.log(
                     `Audio diag: avg=${avg.toFixed(1)} max=${max} nonZero=${nonZero}/${dataArray.length} ` +
-                    `muted=${muted} tracks=${tracks.length} [${trackInfo}]`
+                    `volume=${vol} paused=${paused} tracks=${tracks.length} [${trackInfo}]`
                 );
             }, 5000);
         } catch (e) {
@@ -518,8 +523,9 @@
         if (elements.unmuteBtn) {
             elements.unmuteBtn.classList.add('hidden');
         }
-        if (state.video) {
-            state.video.muted = true;
+        if (state.audio) {
+            state.audio.volume = 0;
+            state.audio.srcObject = null;
         }
         if (state.dataChannel) {
             state.dataChannel.close();

@@ -21,6 +21,7 @@ class CloudflareTunnel:
         self._stdout_task: Optional[asyncio.Task] = None
         self._stopping = False
         self._tunnel_unhealthy = False
+        self._health_fail_count = 0
 
     def set_url_change_callback(self, callback: Callable):
         self._on_url_change = callback
@@ -115,8 +116,8 @@ class CloudflareTunnel:
             import aiohttp
             async with aiohttp.ClientSession() as session:
                 async with session.get(
-                    self.tunnel_url,
-                    timeout=aiohttp.ClientTimeout(total=5),
+                    f"{self.tunnel_url}/health",
+                    timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     return resp.status == 200
         except Exception:
@@ -189,9 +190,14 @@ class CloudflareTunnel:
 
             if self.tunnel_url:
                 healthy = await self._check_tunnel_health()
-                if not healthy:
-                    await self._restart_tunnel("tunnel health check failed")
-                    continue
+                if healthy:
+                    self._health_fail_count = 0
+                else:
+                    self._health_fail_count += 1
+                    if self._health_fail_count >= 3:
+                        await self._restart_tunnel("tunnel health check failed 3 times")
+                        self._health_fail_count = 0
+                        continue
 
 
 async def start_tunnel(port: int = 8080) -> str:
