@@ -193,20 +193,29 @@
         };
 
         state.pc.ontrack = (event) => {
-            console.log('Track received:', event.track.kind, 'stream:', event.streams[0]?.id);
+            console.log('Track received:', event.track.kind, 'stream:', event.streams[0]?.id, 'trackId:', event.track.id);
+            console.log('Track settings:', event.track.getSettings());
+            console.log('Track constraints:', event.track.getConstraints());
+            console.log('Streams count:', event.streams.length);
+            if (event.streams[0]) {
+                console.log('Stream tracks:', event.streams[0].getTracks().map(t => `${t.kind}:${t.id}`));
+            }
             if (!state.video.srcObject) {
                 state.video.srcObject = new MediaStream();
+                console.log('Created new MediaStream');
             }
             event.streams[0].getTracks().forEach(track => {
                 if (!state.video.srcObject.getTracks().find(t => t.id === track.id)) {
                     state.video.srcObject.addTrack(track);
-                    console.log('Added track:', track.kind, track.id);
+                    console.log('Added track:', track.kind, track.id, 'enabled:', track.enabled);
                 }
                 if (track.kind === 'audio') {
                     track.enabled = true;
+                    console.log('Audio track enabled, starting diagnostics...');
                     startAudioDiagnostics();
                 }
             });
+            console.log('Video element srcObject tracks:', state.video.srcObject.getTracks().map(t => `${t.kind}:${t.id}`));
         };
 
         state.video.muted = true;
@@ -449,19 +458,41 @@
         if (_audioDiagInterval) return;
         try {
             const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('AudioContext state:', audioCtx.state);
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => console.log('AudioContext resumed'));
+            }
+
             const source = audioCtx.createMediaElementSource(state.video);
             const analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
             source.connect(analyser);
             analyser.connect(audioCtx.destination);
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            const audioTracks = state.video.srcObject?.getTracks().filter(t => t.kind === 'audio') || [];
+            console.log('Audio tracks:', audioTracks.length);
+            audioTracks.forEach((t, i) => {
+                console.log(`  Audio track ${i}: id=${t.id} enabled=${t.enabled} muted=${t.muted} readyState=${t.readyState} label=${t.label}`);
+                t.onmute = () => console.log(`Audio track ${i} muted`);
+                t.onunmute = () => console.log(`Audio track ${i} unmuted`);
+                t.onended = () => console.log(`Audio track ${i} ended`);
+                t.onsettingschanged = () => console.log(`Audio track ${i} settings changed:`, t.getSettings());
+            });
+
             _audioDiagInterval = setInterval(() => {
                 analyser.getByteFrequencyData(dataArray);
                 const sum = dataArray.reduce((a, b) => a + b, 0);
                 const avg = sum / dataArray.length;
                 const max = Math.max(...dataArray);
+                const nonZero = dataArray.filter(v => v > 0).length;
                 const muted = state.video.muted;
-                console.log(`Audio diag: avg=${avg.toFixed(1)} max=${max} muted=${muted} tracks=${state.video.srcObject?.getTracks().length}`);
+                const tracks = state.video.srcObject?.getTracks().filter(t => t.kind === 'audio') || [];
+                const trackInfo = tracks.map(t => `en=${t.enabled} muted=${t.muted} state=${t.readyState}`).join('; ');
+                console.log(
+                    `Audio diag: avg=${avg.toFixed(1)} max=${max} nonZero=${nonZero}/${dataArray.length} ` +
+                    `muted=${muted} tracks=${tracks.length} [${trackInfo}]`
+                );
             }, 5000);
         } catch (e) {
             console.error('Audio diagnostics failed:', e);

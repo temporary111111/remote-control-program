@@ -36,6 +36,7 @@ class AudioCaptureTrack(AudioStreamTrack):
     async def recv(self) -> AudioFrame:
         if self._start_time is None:
             self._start_time = time.time()
+            logger.info("AudioCaptureTrack: first recv() call")
         
         was_silence = False
         while len(self._buffer) < self.frame_size:
@@ -50,6 +51,12 @@ class AudioCaptureTrack(AudioStreamTrack):
                     elif data.shape[1] == 2 and self.channels == 1:
                         data = data.mean(axis=1, keepdims=True)
                 self._buffer = np.vstack([self._buffer, data])
+                if self._frame_count < 5:
+                    rms = float(np.sqrt(np.mean(data.astype(np.float32) ** 2)))
+                    logger.info(
+                        f"AudioTrack recv got {source_type}: shape={data.shape} "
+                        f"rms={rms:.6f} buffer_now={len(self._buffer)}"
+                    )
             else:
                 remaining = self.frame_size - len(self._buffer)
                 if remaining > 0:
@@ -77,10 +84,13 @@ class AudioCaptureTrack(AudioStreamTrack):
         elapsed = time.time() - self._diag_start
         if elapsed >= 5.0:
             mean_amp = float(np.mean(np.abs(frame_data)))
+            peak_amp = float(np.max(np.abs(frame_data)))
+            rms = float(np.sqrt(np.mean(frame_data.astype(np.float32) ** 2)))
             logger.info(
-                f"Audio diag: frames={self._frame_count} audio={self._total_audio} "
-                f"silence={self._total_silence} mean_amp={mean_amp:.4f} "
-                f"buffered={len(self._buffer)}"
+                f"AudioTrack diag: frames={self._frame_count} audio={self._total_audio} "
+                f"silence={self._total_silence} mean_amp={mean_amp:.6f} "
+                f"peak_amp={peak_amp:.6f} rms={rms:.6f} "
+                f"buffered={len(self._buffer)} timestamp={self._timestamp}"
             )
             self._frame_count = 0
             self._total_silence = 0
