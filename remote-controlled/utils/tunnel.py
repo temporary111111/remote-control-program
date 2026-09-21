@@ -100,7 +100,7 @@ class CloudflareTunnel:
                 if line:
                     logger.debug(f"cloudflared: {line}")
                     lower = line.lower()
-                    if any(kw in lower for kw in ("error", "fail", "disconnect", "refused", "timeout", "fatal")):
+                    if any(kw in lower for kw in ("error", "fatal", "panic")):
                         logger.warning(f"cloudflared reported issue: {line}")
                         self._tunnel_unhealthy = True
             logger.warning("cloudflared stdout pipe closed")
