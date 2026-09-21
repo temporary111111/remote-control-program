@@ -21,10 +21,12 @@ else:
 HIDDEN_IMPORTS = [
     "--hidden-import", "sounddevice",
     "--hidden-import", "soundfile",
+    "--hidden-import", "pyaudiowpatch",
     "--collect-all", "av",
     "--collect-all", "aiortc",
     "--collect-all", "mss",
     "--collect-all", "pynput",
+    "--collect-all", "pyaudiowpatch",
 ]
 
 def build(name: str, windowed: bool = False):
