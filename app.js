@@ -7,11 +7,7 @@
         tunnelUrl: '',
         dataChannel: null,
         video: document.getElementById('remote-video'),
-        audioCtx: null,
-        audioSource: null,
-        audioGain: null,
-        audioAnalyser: null,
-        audioConnected: false,
+        audio: null,
         connecting: false,
         controlEnabled: false,
         reconnectAttempts: 0,
@@ -215,17 +211,29 @@
                     console.log('Added video track:', event.track.id);
                 }
             } else if (event.track.kind === 'audio') {
-                setupWebAudio(event.streams[0]);
+                if (!state.audio) {
+                    state.audio = document.createElement('audio');
+                    state.audio.autoplay = true;
+                    state.audio.volume = 0;
+                    document.body.appendChild(state.audio);
+                }
+                if (!state.audio.srcObject) {
+                    state.audio.srcObject = new MediaStream();
+                }
+                if (!state.audio.srcObject.getTracks().find(t => t.id === event.track.id)) {
+                    state.audio.srcObject.addTrack(event.track);
+                }
+                console.log('Audio track attached to <audio> element, volume=0 (silent)');
                 elements.unmuteBtn.classList.remove('hidden');
             }
         };
 
         elements.unmuteBtn.addEventListener('click', () => {
-            if (state.audioGain) {
-                state.audioGain.gain.setTargetAtTime(1.0, state.audioCtx.currentTime, 0.01);
+            if (state.audio) {
+                state.audio.volume = 1.0;
             }
             elements.unmuteBtn.classList.add('hidden');
-            console.log('Audio unmuted via Web Audio API');
+            console.log('Audio unmuted');
         });
 
         state.dataChannel = state.pc.createDataChannel("input");
@@ -453,86 +461,7 @@
         }
     }
 
-    let _audioDiagInterval = null;
-
-    function setupWebAudio(stream) {
-        try {
-            if (!state.audioCtx) {
-                state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
-                console.log('AudioContext created, state:', state.audioCtx.state, 'sampleRate:', state.audioCtx.sampleRate);
-            }
-            if (state.audioCtx.state === 'suspended') {
-                state.audioCtx.resume().then(() => console.log('AudioContext resumed'));
-            }
-
-            state.audioSource = state.audioCtx.createMediaStreamSource(stream);
-            state.audioGain = state.audioCtx.createGain();
-            state.audioGain.gain.value = 0;
-            state.audioAnalyser = state.audioCtx.createAnalyser();
-            state.audioAnalyser.fftSize = 256;
-
-            state.audioSource.connect(state.audioGain);
-            state.audioGain.connect(state.audioAnalyser);
-            state.audioAnalyser.connect(state.audioCtx.destination);
-            state.audioConnected = true;
-
-            const audioTracks = stream.getAudioTracks();
-            const t = audioTracks[0];
-            console.log('Web Audio: source → gain(0) → analyser → destination');
-            if (t) {
-                console.log('Audio track:', t.id, 'enabled:', t.enabled, 'readyState:', t.readyState);
-            } else {
-                console.log('Stream has', stream.getTracks().length, 'tracks, audio tracks:', audioTracks.length);
-            }
-
-            startAudioDiagnostics();
-        } catch (e) {
-            console.error('Web Audio setup failed:', e);
-        }
-    }
-
-    function startAudioDiagnostics() {
-        if (_audioDiagInterval || !state.audioAnalyser) return;
-        const analyser = state.audioAnalyser;
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-        _audioDiagInterval = setInterval(() => {
-            analyser.getByteFrequencyData(dataArray);
-            const sum = dataArray.reduce((a, b) => a + b, 0);
-            const avg = sum / dataArray.length;
-            const max = Math.max(...dataArray);
-            const nonZero = dataArray.filter(v => v > 0).length;
-            const gain = state.audioGain ? state.audioGain.gain.value : '?';
-            const ctxState = state.audioCtx ? state.audioCtx.state : '?';
-            console.log(
-                `Audio diag: avg=${avg.toFixed(1)} max=${max} nonZero=${nonZero}/${dataArray.length} ` +
-                `gain=${gain} ctxState=${ctxState}`
-            );
-        }, 5000);
-    }
-
     function cleanup() {
-        if (_audioDiagInterval) {
-            clearInterval(_audioDiagInterval);
-            _audioDiagInterval = null;
-        }
-        if (state.audioSource) {
-            state.audioSource.disconnect();
-            state.audioSource = null;
-        }
-        if (state.audioGain) {
-            state.audioGain.disconnect();
-            state.audioGain = null;
-        }
-        if (state.audioAnalyser) {
-            state.audioAnalyser.disconnect();
-            state.audioAnalyser = null;
-        }
-        if (state.audioCtx) {
-            state.audioCtx.close().catch(() => {});
-            state.audioCtx = null;
-        }
-        state.audioConnected = false;
         state.controlEnabled = false;
         const btn = elements.controlToggleBtn;
         if (btn) {
@@ -542,6 +471,11 @@
         }
         if (elements.unmuteBtn) {
             elements.unmuteBtn.classList.add('hidden');
+        }
+        if (state.audio) {
+            state.audio.srcObject = null;
+            state.audio.remove();
+            state.audio = null;
         }
         if (state.dataChannel) {
             state.dataChannel.close();
