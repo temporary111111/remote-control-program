@@ -34,6 +34,13 @@ class AudioCaptureTrack(AudioStreamTrack):
         self._total_audio = 0
 
     async def recv(self) -> AudioFrame:
+        try:
+            return await self._recv_internal()
+        except Exception as e:
+            logger.error(f"AudioTrack recv EXCEPTION: {e}", exc_info=True)
+            raise
+
+    async def _recv_internal(self) -> AudioFrame:
         if self._start_time is None:
             self._start_time = time.time()
             logger.info("AudioCaptureTrack: first recv() call")
@@ -97,9 +104,17 @@ class AudioCaptureTrack(AudioStreamTrack):
             self._total_audio = 0
             self._diag_start = time.time()
         
-        audio_frame = AudioFrame.from_ndarray(frame_data_int.T, format="s16", layout="stereo" if self.channels == 2 else "mono")
+        if self.channels == 2:
+            packed = np.ascontiguousarray(frame_data_int).reshape(1, -1)
+            audio_frame = AudioFrame.from_ndarray(packed, format="s16", layout="stereo")
+        else:
+            audio_frame = AudioFrame.from_ndarray(frame_data_int.reshape(1, -1), format="s16", layout="mono")
         audio_frame.sample_rate = self.sample_rate
         audio_frame.pts = pts
         audio_frame.time_base = time_base
-        
+
+        wait = self._start_time + (self._timestamp / self.sample_rate) - time.time()
+        if wait > 0:
+            await asyncio.sleep(wait)
+
         return audio_frame

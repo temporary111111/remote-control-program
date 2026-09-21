@@ -30,7 +30,7 @@ class AudioCapturer:
         self._mic_stream = None
         self._queue: queue.Queue = queue.Queue(maxsize=200)
         self._running = False
-        self._task: asyncio.Task | None = None
+        self._monitor_task: asyncio.Task | None = None
         self._use_wasapi = False
 
         self._wasapi_callback_count = 0
@@ -97,23 +97,8 @@ class AudioCapturer:
         if self.include_mic:
             self._start_mic_sounddevice()
 
-        self._task = asyncio.create_task(self._drain_to_async())
         self._monitor_task = asyncio.create_task(self._monitor_streams())
         logger.info("Audio capture started")
-
-    async def _drain_to_async(self):
-        loop = asyncio.get_event_loop()
-        while self._running:
-            try:
-                item = await loop.run_in_executor(None, lambda: self._queue.get(timeout=0.2))
-                try:
-                    self._async_queue.put_nowait(item)
-                except asyncio.QueueFull:
-                    pass
-            except queue.Empty:
-                continue
-            except Exception as e:
-                logger.error(f"Drain to async error: {e}")
 
     async def _start_wasapi_loopback(self) -> bool:
         try:
@@ -350,13 +335,6 @@ class AudioCapturer:
             except Exception:
                 pass
             self._p = None
-
-        if self._task:
-            self._task.cancel()
-            try:
-                await self._task
-            except asyncio.CancelledError:
-                pass
 
         if self._monitor_task:
             self._monitor_task.cancel()

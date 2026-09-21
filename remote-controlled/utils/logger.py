@@ -16,6 +16,8 @@ def setup_logger(name: str = "remote-controlled", level: int = logging.INFO) -> 
         handler.setFormatter(formatter)
         logger.addHandler(handler)
     
+    logging.getLogger("aiortc").setLevel(logging.WARNING)
+
     return logger
 
 
