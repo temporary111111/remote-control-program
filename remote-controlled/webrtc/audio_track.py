@@ -44,6 +44,7 @@ class AudioCaptureTrack(AudioStreamTrack):
         if self._start_time is None:
             self._start_time = time.time()
             logger.info("AudioCaptureTrack: first recv() call")
+            self.audio_capturer.drain_queue()
         
         max_buffer = self.frame_size * 2
         was_silence = False

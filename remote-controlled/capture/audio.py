@@ -28,7 +28,7 @@ class AudioCapturer:
         self._p = None
         self._system_stream = None
         self._mic_stream = None
-        self._queue: queue.Queue = queue.Queue(maxsize=200)
+        self._queue: queue.Queue = queue.Queue(maxsize=10)
         self._running = False
         self._monitor_task: asyncio.Task | None = None
         self._use_wasapi = False
@@ -370,3 +370,15 @@ class AudioCapturer:
         except Exception as e:
             logger.error(f"Queue get error: {e}")
             return None
+
+    def drain_queue(self):
+        """Discard all stale items in the queue so audio starts from live."""
+        drained = 0
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+                drained += 1
+            except queue.Empty:
+                break
+        if drained > 0:
+            logger.info(f"Drained {drained} stale audio items from queue")
