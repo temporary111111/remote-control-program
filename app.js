@@ -193,17 +193,18 @@
         };
 
         state.pc.ontrack = (event) => {
-            console.log('Track received:', event.track.kind);
+            console.log('Track received:', event.track.kind, 'stream:', event.streams[0]?.id);
             if (!state.video.srcObject) {
-                state.video.srcObject = event.streams[0];
-            } else {
-                event.streams[0].getTracks().forEach(track => {
-                    state.video.srcObject.addTrack(track);
-                });
+                state.video.srcObject = new MediaStream();
             }
             event.streams[0].getTracks().forEach(track => {
+                if (!state.video.srcObject.getTracks().find(t => t.id === track.id)) {
+                    state.video.srcObject.addTrack(track);
+                    console.log('Added track:', track.kind, track.id);
+                }
                 if (track.kind === 'audio') {
                     track.enabled = true;
+                    startAudioDiagnostics();
                 }
             });
         };
@@ -442,7 +443,40 @@
         }
     }
 
+    let _audioDiagInterval = null;
+
+    function startAudioDiagnostics() {
+        if (_audioDiagInterval) return;
+        try {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioCtx.createMediaElementSource(state.video);
+            const analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            analyser.connect(audioCtx.destination);
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            _audioDiagInterval = setInterval(() => {
+                analyser.getByteFrequencyData(dataArray);
+                const sum = dataArray.reduce((a, b) => a + b, 0);
+                const avg = sum / dataArray.length;
+                const max = Math.max(...dataArray);
+                const muted = state.video.muted;
+                console.log(`Audio diag: avg=${avg.toFixed(1)} max=${max} muted=${muted} tracks=${state.video.srcObject?.getTracks().length}`);
+            }, 5000);
+        } catch (e) {
+            console.error('Audio diagnostics failed:', e);
+        }
+    }
+
+    function stopAudioDiagnostics() {
+        if (_audioDiagInterval) {
+            clearInterval(_audioDiagInterval);
+            _audioDiagInterval = null;
+        }
+    }
+
     function cleanup() {
+        stopAudioDiagnostics();
         state.controlEnabled = false;
         const btn = elements.controlToggleBtn;
         if (btn) {

@@ -28,11 +28,16 @@ class AudioCaptureTrack(AudioStreamTrack):
         self._timestamp = 0
         self._start_time: Optional[float] = None
         self._buffer = np.zeros((0, channels), dtype=np.float32)
+        self._frame_count = 0
+        self._diag_start = time.time()
+        self._total_silence = 0
+        self._total_audio = 0
 
     async def recv(self) -> AudioFrame:
         if self._start_time is None:
             self._start_time = time.time()
         
+        was_silence = False
         while len(self._buffer) < self.frame_size:
             audio_data = await self.audio_capturer.get_mixed_audio()
             if audio_data is not None:
@@ -46,8 +51,11 @@ class AudioCaptureTrack(AudioStreamTrack):
                         data = data.mean(axis=1, keepdims=True)
                 self._buffer = np.vstack([self._buffer, data])
             else:
-                silence = np.zeros((self.frame_size, self.channels), dtype=np.float32)
-                self._buffer = np.vstack([self._buffer, silence])
+                remaining = self.frame_size - len(self._buffer)
+                if remaining > 0:
+                    silence = np.zeros((remaining, self.channels), dtype=np.float32)
+                    self._buffer = np.vstack([self._buffer, silence])
+                was_silence = True
                 break
         
         frame_data = self._buffer[:self.frame_size]
@@ -59,6 +67,25 @@ class AudioCaptureTrack(AudioStreamTrack):
         pts = self._timestamp
         time_base = fractions.Fraction(1, self.sample_rate)
         self._timestamp += self.frame_size
+        
+        self._frame_count += 1
+        if was_silence:
+            self._total_silence += 1
+        else:
+            self._total_audio += 1
+
+        elapsed = time.time() - self._diag_start
+        if elapsed >= 5.0:
+            mean_amp = float(np.mean(np.abs(frame_data)))
+            logger.info(
+                f"Audio diag: frames={self._frame_count} audio={self._total_audio} "
+                f"silence={self._total_silence} mean_amp={mean_amp:.4f} "
+                f"buffered={len(self._buffer)}"
+            )
+            self._frame_count = 0
+            self._total_silence = 0
+            self._total_audio = 0
+            self._diag_start = time.time()
         
         audio_frame = AudioFrame.from_ndarray(frame_data_int.T, format="s16", layout="stereo" if self.channels == 2 else "mono")
         audio_frame.sample_rate = self.sample_rate
