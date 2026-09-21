@@ -215,7 +215,7 @@
                     console.log('Added video track:', event.track.id);
                 }
             } else if (event.track.kind === 'audio') {
-                setupWebAudio(event.track);
+                setupWebAudio(event.streams[0]);
                 elements.unmuteBtn.classList.remove('hidden');
             }
         };
@@ -455,7 +455,7 @@
 
     let _audioDiagInterval = null;
 
-    function setupWebAudio(track) {
+    function setupWebAudio(stream) {
         try {
             if (!state.audioCtx) {
                 state.audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
@@ -465,7 +465,6 @@
                 state.audioCtx.resume().then(() => console.log('AudioContext resumed'));
             }
 
-            const stream = new MediaStream([track]);
             state.audioSource = state.audioCtx.createMediaStreamSource(stream);
             state.audioGain = state.audioCtx.createGain();
             state.audioGain.gain.value = 0;
@@ -477,8 +476,14 @@
             state.audioAnalyser.connect(state.audioCtx.destination);
             state.audioConnected = true;
 
+            const audioTracks = stream.getAudioTracks();
+            const t = audioTracks[0];
             console.log('Web Audio: source → gain(0) → analyser → destination');
-            console.log('Audio track:', track.id, 'enabled:', track.enabled, 'readyState:', track.readyState);
+            if (t) {
+                console.log('Audio track:', t.id, 'enabled:', t.enabled, 'readyState:', t.readyState);
+            } else {
+                console.log('Stream has', stream.getTracks().length, 'tracks, audio tracks:', audioTracks.length);
+            }
 
             startAudioDiagnostics();
         } catch (e) {
